@@ -1,14 +1,7 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
-"""
-Module 1 — Data Profiler
-Reads CSV or Excel files and produces a full column-level profile:
-  - Data type classification
-  - Missing value counts & percentages
-  - Basic stats (mean, median, std, min, max, range) for numeric columns
-  - Unique value counts and top values for categorical columns
-"""
+from scipy import stats
+
 
 def detect_column_types(df: pd.DataFrame) -> dict:
     """
@@ -68,6 +61,11 @@ def detect_column_types(df: pd.DataFrame) -> dict:
     return results
 
 def missing_data_percentage(df) -> dict:
+    '''
+     Takes a dataframe and returns a dictionary of columns with missing data and their percentage
+     Only columns with at least one missing value are included
+     Percentage is rounded to 2 decimal places
+    '''
     missing = {}
     
     for col in df.columns:
@@ -80,3 +78,71 @@ def missing_data_percentage(df) -> dict:
             missing[col] = percentage
     
     return missing
+
+def calculate_stats(df) -> dict:
+    '''
+    Calculates mean, median, std dev, min, max and skewness
+    for all numeric columns in a DataFrame.
+    Skips non-numeric columns and drops NaN values before computing.
+    Returns a nested dictionary with column names as keys and stats as values.
+    '''
+    stats_dict = {}
+    
+    for col in df.select_dtypes(include=[np.number]).columns:
+        data = df[col].dropna()
+        stats_dict[col] = {
+            'mean':     round(data.mean(), 4),
+            'median':   round(data.median(), 4),
+            'std_dev':  round(data.std(), 4),
+            'min':      round(data.min(), 4),
+            'max':      round(data.max(), 4),
+            'skewness': round(stats.skew(data), 4)
+        }
+    
+    return stats_dict
+
+def check_dominated_categorical(df, threshold=0.70):
+    """
+    Checks if any categorical column is dominated by a single value (default > 70%).
+    Returns a dict with column names as keys and 'yes' (dominated) or 'no' (not dominated).
+    """
+    col_types = detect_column_types(df)
+    categorical_cols = [col for col, dtype in col_types.items() if dtype == 'categorical']
+    
+    result = {}
+    for col in categorical_cols:
+        top_freq = df[col].value_counts(normalize=True).iloc[0]
+        result[col] = 'yes' if top_freq > threshold else 'no'
+    
+    return result
+
+def dataframe_summary(df):
+    """
+    Calculates basic structural statistics for a DataFrame.
+    Returns a dictionary with total rows, columns, missing values count, and duplicate rows.
+    """
+    return {
+        "total_rows": len(df),
+        "total_columns": len(df.columns),
+        "missing_values": int(df.isnull().sum().sum()),
+        "duplicate_rows": int(df.duplicated().sum())
+    }
+
+def full_profile(df: pd.DataFrame, dominated_threshold: float = 0.70) -> dict:
+    """
+    Runs all profiling functions and returns a single unified dictionary.
+
+    Keys:
+      - 'summary'            → dataframe_summary()
+      - 'column_types'       → detect_column_types()
+      - 'missing_pct'        → missing_data_percentage()
+      - 'numeric_stats'      → calculate_stats()
+      - 'dominated_columns'  → check_dominated_categorical()
+    """
+    return {
+        "summary":           dataframe_summary(df),
+        "column_types":      detect_column_types(df),
+        "missing_pct":       missing_data_percentage(df),
+        "numeric_stats":     calculate_stats(df),
+        "dominated_columns": check_dominated_categorical(df, threshold=dominated_threshold),
+    }
