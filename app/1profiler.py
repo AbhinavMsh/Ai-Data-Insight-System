@@ -146,3 +146,31 @@ def full_profile(df: pd.DataFrame, dominated_threshold: float = 0.70) -> dict:
         "numeric_stats":     calculate_stats(df),
         "dominated_columns": check_dominated_categorical(df, threshold=dominated_threshold),
     }
+
+def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cleans the dataframe using the following strategy:
+      - Numeric missing values  → fill with column mean
+      - Categorical missing values → drop the row
+      - Duplicate rows → dropped
+    Returns a cleaned copy of the dataframe.
+    """
+    df = df.copy()
+
+    # Step 1: Drop duplicate rows
+    df = df.drop_duplicates()
+
+    # Step 2: Detect column types
+    col_types = detect_column_types(df)
+
+    # Step 3: Fill numeric missing values with column mean
+    numeric_cols = [col for col, dtype in col_types.items() if dtype == "numeric"]
+    for col in numeric_cols:
+        if df[col].isnull().any():
+            df[col] = df[col].fillna(df[col].mean())
+
+    # Step 4: Drop rows where categorical columns have missing values
+    categorical_cols = [col for col, dtype in col_types.items() if dtype == "categorical"]
+    df = df.dropna(subset=categorical_cols)
+
+    return df 
